@@ -7,6 +7,9 @@ from scipy.stats import mode
 """
 Script to process data like in paper and save it into processed_data
 """
+
+list_s = ['S2','S3','S4','S5','S6','S7','S8','S9','S10','S11','S13','S14','S15','S16','S17']
+
 # Load subject data
 def load_wesad_subject(file_path):
     with open(file_path, 'rb') as f:
@@ -15,38 +18,59 @@ def load_wesad_subject(file_path):
 
 # Preprocess EDA: window, extract features, assign label
 def preprocess_eda_features(data, window_size_sec=10, sampling_rate=4, signal_type='wrist'):
-    eda = data['signal'][signal_type]['EDA']  # 1D array
-    labels = data['label']                # 1D array per second
-
-    # Compute number of samples per window
+    """
+    Segments EDA signal into non-overlapping windows and extracts statistical features.
+    Uses majority label within each window to assign a binary label (0=baseline, 1=stress).
+    Args:
+        data (dict): One subject's data loaded from WESAD .pkl
+        window_size_sec (int): Length of each window in seconds (default: 10)
+        sampling_rate (int): Sampling rate of EDA signal (default: 4 for wrist)
+        signal_type (str): 'wrist' or 'chest'
+    Returns:
+        pd.DataFrame: DataFrame with features and binary labels
+    """
+    eda = data['signal'][signal_type]['EDA']
+    labels = data['label']  # sampled at 700 Hz
+    label_sampling_rate = 700  # As per WESAD dataset specifications
+    
     samples_per_window = window_size_sec * sampling_rate
     total_windows = len(eda) // samples_per_window
-
     features = []
+    
     for i in range(total_windows):
         start = i * samples_per_window
         end = start + samples_per_window
-
         eda_window = eda[start:end]
-
-        # Label for this window (using mode of per-second labels)
-        label_idx_start = start // sampling_rate
-        label_idx_end = end // sampling_rate
-        window_labels = labels[label_idx_start:label_idx_end]
-        label = mode(window_labels, keepdims=False).mode if len(window_labels) > 0 else 0
-
+        
+        # Convert from EDA sample index to label index (accounting for different sampling rates)
+        label_idx_start = int((start / sampling_rate) * label_sampling_rate)
+        label_idx_end = int((end / sampling_rate) * label_sampling_rate)
+        
+        # Make sure indices are within bounds of labels array
+        label_idx_start = min(label_idx_start, len(labels)-1)
+        label_idx_end = min(label_idx_end, len(labels))
+        
+        label_window = labels[label_idx_start:label_idx_end]
+        
+        # Keep only baseline and stress (1 and 2)
+        label_window = [l for l in label_window if l in [1, 2]]
+        if len(label_window) == 0:
+            continue  # skip window with undefined or unwanted labels
+        
+        majority_label = int(mode(label_window, keepdims=False).mode)
+        binary_label = 0 if majority_label == 1 else 1  # 0 = baseline, 1 = stress
+        
         features.append({
             'mean_eda': np.mean(eda_window),
             'std_eda': np.std(eda_window),
             'min_eda': np.min(eda_window),
             'max_eda': np.max(eda_window),
-            'label': label
+            'label': binary_label
         })
-
+    
     return pd.DataFrame(features)
 
 if __name__ == "__main__":
-    list_s = ['S2','S3','S4','S5','S6','S7','S8','S9','S10','S11','S13','S14','S15','S16','S17']
     processed_dir = "../data/processed_data/"
     chest_dir = os.path.join(processed_dir, 'chest')
     wrist_dir = os.path.join(processed_dir, 'wrist')
