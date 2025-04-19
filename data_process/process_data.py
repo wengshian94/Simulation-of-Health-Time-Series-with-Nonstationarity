@@ -66,8 +66,8 @@ def preprocess_eda_features(data, window_size_sec=5, sampling_rate=4, signal_typ
             continue  # skip window with undefined or unwanted labels
         
         majority_label = int(mode(label_window, keepdims=False).mode)
-       #binary_label = 0 if majority_label == 1 else 1  # 0 = baseline, 1 = stress
-       binary_label = majority_label
+        #binary_label = 0 if majority_label == 1 else 1  # 0 = baseline, 1 = stress
+        binary_label = majority_label
         
         features.append({
             'mean_eda': np.mean(eda_window),
