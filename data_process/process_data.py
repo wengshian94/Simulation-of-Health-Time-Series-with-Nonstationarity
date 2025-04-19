@@ -17,7 +17,7 @@ def load_wesad_subject(file_path):
     return data
 
 # Preprocess EDA: window, extract features, assign label
-def preprocess_eda_features(data, window_size_sec=10, sampling_rate=4, signal_type='wrist'):
+def preprocess_eda_features(data, window_size_sec=10, sampling_rate=4, signal_type='wrist', include_3_cats: True):
     """
     Segments EDA signal into non-overlapping windows and extracts statistical features.
     Uses majority label within each window to assign a binary label (0=baseline, 1=stress).
@@ -26,6 +26,7 @@ def preprocess_eda_features(data, window_size_sec=10, sampling_rate=4, signal_ty
         window_size_sec (int): Length of each window in seconds (default: 10)
         sampling_rate (int): Sampling rate of EDA signal (default: 4 for wrist)
         signal_type (str): 'wrist' or 'chest'
+        include_3_cats (bool): True to have 3 stress categories 1) Baseline 2) Stress 3) Amusement. False to only have 2 categories
     Returns:
         pd.DataFrame: DataFrame with features and binary labels
     """
@@ -52,13 +53,21 @@ def preprocess_eda_features(data, window_size_sec=10, sampling_rate=4, signal_ty
         
         label_window = labels[label_idx_start:label_idx_end]
         
+
         # Keep only baseline and stress (1 and 2)
-        label_window = [l for l in label_window if l in [1, 2]]
+        if include_3_cats:
+            accepted_categories = [1, 2, 3]
+        else:
+            accepted_categories = [1,2]
+
+        label_window = [l for l in label_window if l in accepted_categories]
+
         if len(label_window) == 0:
             continue  # skip window with undefined or unwanted labels
         
         majority_label = int(mode(label_window, keepdims=False).mode)
-        binary_label = 0 if majority_label == 1 else 1  # 0 = baseline, 1 = stress
+       #binary_label = 0 if majority_label == 1 else 1  # 0 = baseline, 1 = stress
+       binary_label = majority_label
         
         features.append({
             'mean_eda': np.mean(eda_window),
