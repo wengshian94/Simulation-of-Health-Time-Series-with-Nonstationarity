@@ -17,7 +17,7 @@ def load_wesad_subject(file_path):
     return data
 
 # Preprocess EDA: window, extract features, assign label
-def preprocess_eda_features(data, window_size_sec=5, sampling_rate=4, signal_type='chest', include_3_cats=True):
+def preprocess_eda_features(data, window_size_sec=10, sampling_rate=4, signal_type='chest', include_3_cats=True):
     """
     Segments EDA signal into non-overlapping windows and extracts statistical features.
     Uses majority label within each window to assign a binary label (0=baseline, 1=stress).
