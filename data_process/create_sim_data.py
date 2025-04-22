@@ -6,7 +6,7 @@ from process_data import list_s
 
 def preprocess_eda_features(signal, labels, sampling_rate=4, window_sec=10):
     window_size = sampling_rate * window_sec
-    features, window_labels = [], []
+    features = []
 
     for start in range(0, len(signal) - window_size + 1, window_size):
         end = start + window_size
@@ -18,7 +18,7 @@ def preprocess_eda_features(signal, labels, sampling_rate=4, window_sec=10):
             "std_eda": np.std(window),
             "min_eda": np.min(window),
             "max_eda": np.max(window),
-            "label": int(np.round(np.mean(label_window)))  # majority label in window
+            "label": int(np.round(np.mean(label_window)))  # dominant label in the window
         }
 
         features.append(feature)
@@ -26,47 +26,64 @@ def preprocess_eda_features(signal, labels, sampling_rate=4, window_sec=10):
     return pd.DataFrame(features)
 
 
-def simulate_eda_individual(length_sec=2400, sampling_rate=4):
-    """
-    Simulate EDA signal using NeuroKit2 for a single individual.
-    - length_sec: Total duration in seconds
-    - sampling_rate: Samples per second
-    """
-    signal = nk.eda_simulate(duration=length_sec, sampling_rate=sampling_rate, noise=0.05)
-
-    # Create a random alternating binary label pattern (baseline=0, stress=1)
+def simulate_eda_individual(length_sec=2500, sampling_rate=4):
     total_samples = length_sec * sampling_rate
-    segment_length = sampling_rate * 30  # 30-second blocks
-    labels = np.zeros(total_samples)
+    signal = []
+    labels = []
 
-    for i in range(0, total_samples, 2 * segment_length):
-        stress_start = i + segment_length
-        stress_end = min(i + 2 * segment_length, total_samples)
-        labels[stress_start:stress_end] = 1
+    current_state = 0  # Start with baseline
+    remaining = total_samples
+
+    while remaining > 0:
+        segment_duration = np.random.randint(20, 60) * sampling_rate
+        segment_duration = min(segment_duration, remaining)
+
+        eda_segment = nk.eda_simulate(duration=int(segment_duration / sampling_rate),
+                                      sampling_rate=sampling_rate,
+                                      noise=0.02)
+
+        # Apply a random level to introduce nonstationarity
+        eda_segment *= np.random.uniform(0.8, 1.2)
+
+        # Flip stress state
+        current_state = 1 - current_state if np.random.rand() > 0.3 else current_state
+
+        # Occasionally introduce noisy/mixed labels (simulate real physiology)
+        if np.random.rand() < 0.2:
+            label_segment = np.random.binomial(1, 0.5, size=segment_duration)
+        else:
+            label_segment = np.full(segment_duration, current_state)
+
+        signal.extend(eda_segment)
+        labels.extend(label_segment)
+
+        remaining -= segment_duration
+
+    signal = np.array(signal[:total_samples])
+    labels = np.array(labels[:total_samples])
 
     return preprocess_eda_features(signal, labels, sampling_rate=sampling_rate)
 
 
 if __name__ == "__main__":
-    # Simulate for len(list_s) individuals
     simulated_dataset = []
+
     for subject_id in range(len(list_s)):
-        print(f'Sim: {subject_id}')
+        print(f"Simulating subject {subject_id}")
         df = simulate_eda_individual()
-        df['subject'] = subject_id
+        df["subject"] = subject_id
         simulated_dataset.append(df)
 
-    # Combine into one DataFrame
     sim_data = pd.concat(simulated_dataset, ignore_index=True)
 
-    #Save file
     sim_dir = "../data/sim_data/"
-
-    #Ensure that the dirs are created
-    if not os.path.exists(sim_dir):
-        os.mkdir(sim_dir)
+    os.makedirs(sim_dir, exist_ok=True)
     sim_filename = os.path.join(sim_dir, 'raw_sim_data.csv')
-    sim_data.to_csv(sim_filename)
+    sim_data.to_csv(sim_filename, index=False)
+
     print(f"Data saved in: {sim_filename}")
-
-
+    print("--- Raw Simulated Data ---")
+    print(sim_data["label"].value_counts())
+    print(f"Total rows: {len(sim_data)}")
+    print(f"Duplicate rows: {sim_data.duplicated().sum()}")
+    print(sim_data.head())
