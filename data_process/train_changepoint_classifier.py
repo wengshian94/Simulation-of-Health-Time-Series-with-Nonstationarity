@@ -21,8 +21,13 @@ for file in os.listdir(INPUT_DIR):
         if "Down Trend" not in df.columns:
             df["Down Trend"] = None
 
+        df['trend_regime'] = df[['Up Trend', 'Down Trend']].apply(lambda x: str(x['Up Trend']) + "_" + str(x['Down Trend']) , axis = 1)
+        df['prev_trend_regime'] = df['trend_regime'].shift(1)
+        df = df.dropna()
+        
         # Create binary changepoint label
-        df["changepoint"] = df[["Up Trend", "Down Trend"]].notnull().any(axis=1).astype(int)
+        df['changepoint'] = df.apply(lambda x: 1 if x.trend_regime != x.prev_trend_regime else 0, axis = 1)
+        df['changepoint'] = df['changepoint'].astype(int)
 
         # Optional: Add diff features
         df["mean_diff"] = df["mean_eda"].diff().fillna(0)
