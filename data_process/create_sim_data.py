@@ -26,43 +26,25 @@ def preprocess_eda_features(signal, labels, sampling_rate=4, window_sec=10):
     return pd.DataFrame(features)
 
 
-def simulate_eda_individual(length_sec=2500, sampling_rate=4):
-    total_samples = length_sec * sampling_rate
-    signal = []
-    labels = []
+def simulate_eda_individual(sampling_rate=4):
+    # Durations from the paper
+    baseline_duration = 1174  # in seconds
+    stress_duration = 664     # in seconds
 
-    current_state = 0  # Start with baseline
-    remaining = total_samples
+    # SCR peak counts drawn from uniform distributions
+    scr_count_baseline = np.random.randint(1, 6)  # U(1,5)
+    scr_count_stress = np.random.randint(6, 21)   # U(6,20)
 
-    while remaining > 0:
-        segment_duration = np.random.randint(20, 60) * sampling_rate
-        segment_duration = min(segment_duration, remaining)
+    # Simulate EDA signals
+    eda_baseline = nk.eda_simulate(duration=baseline_duration, sampling_rate=sampling_rate, scr_number=scr_count_baseline)
 
-        eda_segment = nk.eda_simulate(duration=int(segment_duration / sampling_rate),
-                                      sampling_rate=sampling_rate,
-                                      noise=0.02)
+    eda_stress = nk.eda_simulate(duration=stress_duration, sampling_rate=sampling_rate, scr_number=scr_count_stress)
 
-        # Apply a random level to introduce nonstationarity
-        eda_segment *= np.random.uniform(0.8, 1.2)
+    # Concatenate signal and labels
+    signal = np.concatenate([eda_baseline, eda_stress])
+    labels = np.array([0] * len(eda_baseline) + [1] * len(eda_stress))
 
-        # Flip stress state
-        current_state = 1 - current_state if np.random.rand() > 0.3 else current_state
-
-        # Occasionally introduce noisy/mixed labels (simulate real physiology)
-        if np.random.rand() < 0.2:
-            label_segment = np.random.binomial(1, 0.5, size=segment_duration)
-        else:
-            label_segment = np.full(segment_duration, current_state)
-
-        signal.extend(eda_segment)
-        labels.extend(label_segment)
-
-        remaining -= segment_duration
-
-    signal = np.array(signal[:total_samples])
-    labels = np.array(labels[:total_samples])
-
-    return preprocess_eda_features(signal, labels, sampling_rate=sampling_rate)
+    return signal, labels
 
 
 if __name__ == "__main__":
@@ -70,7 +52,8 @@ if __name__ == "__main__":
 
     for subject_id in range(len(list_s)):
         print(f"Simulating subject {subject_id}")
-        df = simulate_eda_individual()
+        signal, labels = simulate_eda_individual()
+        df = preprocess_eda_features(signal, labels, sampling_rate=4)
         df["subject"] = subject_id
         simulated_dataset.append(df)
 
